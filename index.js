@@ -1,18 +1,17 @@
-const { promises: { readFile } } = require('fs');
-const pres = require('./persistent-client');
+const client = require('./persistent-client');
 
 const episodeLink = '/episode/vikings-season-2-ep-2';
 const fileName = episodeLink.split('/').at(-1);
 
-const egyClient = pres({
+const egyClient = client({
     baseURL: 'https://jeny.egybest.fyi/',
     transformResponse: _ => _
 });
 
-const vidStreamClient = pres({
+const vidStreamClient = client({
     baseURL: 'https://vidstream.to/',
     transformResponse: _ => _
-})
+});
 
 const srcRegex = /auto-size" src="(.*?)"/g;
 const jsCodeRegex = /<script.*?>function \w+?\(\)\{(.+?)};<\/script/g;
@@ -25,12 +24,15 @@ const encodingArraysRegex = /,([0-9a-zA-Z_]{2,12})=\[\]/g;
 egyClient.get(episodeLink)
     .then(res => srcRegex.exec(res.data)[1])
     .then(src => 
-        egyClient.get(src).then(({ data }) => {            
+        egyClient.get(src).then(({ data }) => {
+            const sourceLink = sourceRegex.exec(data);
+            if (sourceLink) return sourceLink[1];
+            
             let jsCode = jsCodeRegex.exec(data)[1];
         
             const verificationToken = verificationTokenRegex.exec(jsCode)[1];
             const encodedAdLinkVar = encodedAdLinkVarRegex.exec(jsCode)[1];
-            const [, firstEncodingArrayName, secondEncodingArrayName] = [...jsCode.matchAll(encodingArraysRegex)].map(_ => _[1]);
+            const [firstEncodingArrayName, secondEncodingArrayName] = [...jsCode.matchAll(encodingArraysRegex)].slice(1, 3).map(_ => _[1]);
         
             jsCode = jsCode.replace(/[;,]\$\('\*'\)(.*)$/g, ';');
             jsCode = jsCode.replace(/,ismob=(.*)\(navigator\[(.*)\]\)[,;]/g, ';');
@@ -38,8 +40,7 @@ egyClient.get(episodeLink)
             
             eval(jsCode);
         
-            const firstEncodingArray = eval(firstEncodingArrayName);
-            const secondEncodingArray = eval(secondEncodingArrayName);
+            const firstEncodingArray = eval(firstEncodingArrayName), secondEncodingArray = eval(secondEncodingArrayName);
         
             const verificationPath = secondEncodingArray.reduce((prev, curr) => prev + (firstEncodingArray[curr] || ''), '');
             const encodedAdPath = eval(encodedAdLinkVar)[0];
@@ -49,15 +50,15 @@ egyClient.get(episodeLink)
             const adLink = '/' + atob(toBeDecoded);
             const verificationLink = `/tvc.php?verify=${verificationPath}`;
         
-            return Promise.all([
-                egyClient.get(adLink),
-                egyClient.post(verificationLink, {
-                    [verificationToken]: 'ok'
-                })
-            ]);
+            return egyClient.get(adLink)
+                .then(() =>
+                    egyClient.post(verificationLink, {
+                        [verificationToken]: 'ok'
+                    })
+                )
+                .then(() => egyClient.get(src))
+                .then(_ => sourceRegex.exec(_.data)[1])        
         })
-        .then(() => egyClient.get(src))
-        .then(_ => sourceRegex.exec(_.data)[1])
         .then(m3uLink => vidStreamClient.get(m3uLink))
         .then(_ => _.data.split('\n').slice(1).filter(_ => _))
         .then(_ => {
