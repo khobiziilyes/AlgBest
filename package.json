@@ -1,0 +1,16 @@
+{
+  "name": "algbest",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "K. Ilyes",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.26.1",
+    "axios-cookiejar-support": "^2.0.4",
+    "tough-cookie": "^4.0.0"
+  }
+}
