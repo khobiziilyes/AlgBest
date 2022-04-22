@@ -56,6 +56,20 @@ egyClient.get('/episode/vikings-season-2-ep-2')
     .then(() => egyClient.get(src))
     .then(idk => sourceRegex.exec(idk.data)[1])
     .then(m3uLink => vidStreamClient.get(m3uLink))
+    .then(_ => _.data.split('\n').slice(1).filter(_ => _).reduce((acc, curr, i) => {
+        if (i % 2) {
+            acc[acc.length - 1] = {
+                ...acc[acc.length - 1],
+                link: curr
+            }
+        } else {
+            acc.push({
+                data: curr
+            });
+        }
+
+        return acc
+    }, []))
     .then(links => {
         debugger;
     })
